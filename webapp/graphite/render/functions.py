@@ -16,10 +16,14 @@
 from datetime import date, datetime, timedelta
 from functools import partial
 from itertools import izip, imap
+import array
 import math
+import numpy
 import re
 import random
 import time
+
+import cylowess
 
 from graphite.logger import log
 from graphite.render.datalib import fetchData, TimeSeries, timestamp
@@ -2492,6 +2496,21 @@ def hitcount(requestContext, seriesList, intervalString, alignToInterval = False
   return results
 
 
+def lowess(requestContext, seriesList, bandwidth=0.1, iterations=3):
+  results = []
+
+  for series in seriesList:
+    x = numpy.array(xrange(1, len(series) + 1), numpy.float)
+    y = numpy.array(map(lambda n: n or 0, series), numpy.float)
+    res = map(lambda x: x[1], cylowess.lowess(y, x, bandwidth, iterations, (x.max() - x.min()) * 0.01))
+    name = 'lowess(%s, %f, %d)' % (series.name, float(bandwidth), int(iterations))
+    newSeries = TimeSeries(name, series.start, series.end, series.step, res)
+    newSeries.pathExpression = name
+    results.append(newSeries)
+
+  return results
+
+
 def timeFunction(requestContext, name):
   """
   Short Alias: time()
@@ -2679,6 +2698,7 @@ SeriesFunctions = {
   'smartSummarize' : smartSummarize,
   'hitcount'  : hitcount,
   'absolute' : absolute,
+  'lowess' : lowess,
 
   # Calculate functions
   'movingAverage' : movingAverage,
